@@ -26,6 +26,7 @@ import {
   Bot,
 } from 'lucide-vue-next'
 import { ApiError } from '@/lib/api'
+import { formatRelativeTime } from '@/lib/utils'
 import {
   cancelChatSession,
   createChatSession,
@@ -50,6 +51,7 @@ import {
   type PromptOption,
 } from '@/lib/prompts-api'
 import ChatMarkdown from '@/components/ai/ChatMarkdown.vue'
+import KbRefImages, { type KbFigureRef } from '@/components/knowledge/KbRefImages.vue'
 import {
   listModelOptions,
   modelTypeLabel,
@@ -64,6 +66,9 @@ interface RefChunk {
   doc_id?: string
   kb_id?: string
   kbId?: string
+  name?: string
+  chunk_index?: number
+  images?: KbFigureRef[]
 }
 
 interface ToolCallUi {
@@ -208,15 +213,23 @@ function genId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
 }
 
-function fmtAgo(ts: number) {
-  if (!ts) return ''
-  const diff = Date.now() - ts
-  const m = Math.floor(diff / 60_000)
-  if (m < 1) return '刚刚'
-  if (m < 60) return `${m} 分钟前`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h} 小时前`
-  return `${Math.floor(h / 24)} 天前`
+function figuresFromRefs(refs?: RefChunk[] | null): KbFigureRef[] {
+  const ranked = [...(refs || [])].sort(
+    (a, b) => (b.score ?? 0) - (a.score ?? 0),
+  )
+  const seen = new Set<string>()
+  const out: KbFigureRef[] = []
+  for (const r of ranked.slice(0, 2)) {
+    if ((r.score ?? 0) < 0.25) continue
+    for (const img of r.images || []) {
+      const key = img.url || img.id
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      out.push(img)
+      if (out.length >= 4) return out
+    }
+  }
+  return out
 }
 
 const mode = ref<Mode>('fast')
@@ -330,6 +343,12 @@ function ensureDefaultPrompt() {
   }
 }
 
+/** 进入对话 / 新建会话：有可用知识库则默认全选；无库则保持空。 */
+function selectAllKnowledgeBases() {
+  if (activeAgent.value) return
+  selectedKbIds.value = kbList.value.map((b) => b.id)
+}
+
 function clearAgentQuery() {
   if (!('agentId' in route.query)) return
   const next = { ...route.query }
@@ -341,6 +360,7 @@ function clearActiveAgent(opts?: { keepQuery?: boolean }) {
   activeAgent.value = null
   if (!opts?.keepQuery) clearAgentQuery()
   ensureDefaultPrompt()
+  selectAllKnowledgeBases()
 }
 
 async function applyAgentById(agentId: string) {
@@ -378,7 +398,7 @@ onMounted(() => {
   void (async () => {
     await loadSessions()
     try {
-      kbList.value = await listKnowledgeBases()
+      kbList.value = await listKnowledgeBases({ access: 'use' })
     } catch {
       // 未登录或接口失败时保持空列表
     }
@@ -409,6 +429,7 @@ onMounted(() => {
       await applyAgentById(qAgent)
     } else {
       ensureDefaultPrompt()
+      selectAllKnowledgeBases()
     }
   })()
   document.addEventListener('mousedown', onDocClick)
@@ -419,7 +440,11 @@ watch(
   (raw) => {
     const id = typeof raw === 'string' ? raw.trim() : ''
     if (!id) {
-      if (activeAgent.value) activeAgent.value = null
+      if (activeAgent.value) {
+        activeAgent.value = null
+        ensureDefaultPrompt()
+        selectAllKnowledgeBases()
+      }
       return
     }
     if (activeAgent.value?.id === id) return
@@ -483,6 +508,7 @@ async function handleCreateSession() {
     activeSessionId.value = item.id
     messages.value = []
     ensureDefaultPrompt()
+    selectAllKnowledgeBases()
     toast.value = { type: 'ok', msg: '已新建会话' }
   } catch (e) {
     toast.value = {
@@ -622,8 +648,16 @@ async function sendQuestion(text: string) {
         modelId: selectedModelId.value || null,
       },
       {
-        onRefs: (chunks) => {
-          patchAssistant({ refs: chunks as RefChunk[] })
+        onRefs: (chunks, meta) => {
+          patchAssistant({
+            refs: chunks as RefChunk[],
+            useKnowledge:
+              typeof meta?.useKnowledge === 'boolean'
+                ? meta.useKnowledge
+                : (chunks as RefChunk[]).length > 0,
+            knowledgeBaseNames:
+              meta?.useKnowledge === false ? [] : assistantMsg.knowledgeBaseNames,
+          })
         },
         onTool: (payload) => {
           const key = payload.toolCallId || payload.toolName || payload.name || genId()
@@ -917,13 +951,13 @@ function resetCurrent() {
             class="absolute right-0 top-full z-30 mt-1.5 w-64 rounded-lg border border-hairline bg-bg-elevated shadow-xl p-2"
           >
             <div class="px-1.5 pb-1.5 mb-1.5 border-b border-hairline text-[11px] text-text-muted">
-              未选 = 不检索；可多选缩小范围
+              默认全选；可取消缩小范围。未选 = 不检索
             </div>
             <div
               v-if="kbList.length === 0"
               class="px-2 py-4 text-center text-[11px] text-text-muted"
             >
-              暂无知识库，请先到「知识库」创建并导入资料
+              没有可检索的知识库。请联系管理员为你开通「使用」权限。
             </div>
             <div v-else class="max-h-56 overflow-y-auto space-y-0.5">
               <button
@@ -1107,7 +1141,7 @@ function resetCurrent() {
                 </div>
               </div>
               <div class="mt-1 text-[10px] font-mono text-text-muted">
-                {{ s.messageCount }} 条 · {{ fmtAgo(s.updatedAt || s.lastMessageAt) }}
+                {{ s.messageCount }} 条 · {{ formatRelativeTime(s.updatedAt || s.lastMessageAt) }}
               </div>
             </template>
           </div>
@@ -1127,7 +1161,7 @@ function resetCurrent() {
             >
               <BotMessageSquare class="size-7 text-white" :stroke-width="2.4" />
             </div>
-            <div class="text-[15px] font-semibold mb-1">微泰智能助手</div>
+            <div class="text-[15px] font-semibold mb-1">新希望智能助手</div>
             <div class="text-[12px] text-text-secondary max-w-md mb-5 leading-relaxed">
               <template v-if="usePrompt">
                 已选提示词「{{ selectedPromptName }}」。
@@ -1322,6 +1356,11 @@ function resetCurrent() {
                     :content="m.content"
                     :streaming="Boolean(m.loading)"
                   />
+
+                  <KbRefImages
+                    v-if="m.refs && m.refs.length > 0 && !m.loading"
+                    :images="figuresFromRefs(m.refs)"
+                  />
                 </div>
 
                 <details
@@ -1351,6 +1390,11 @@ function resetCurrent() {
                       >
                         {{ r.content }}
                       </div>
+                      <KbRefImages
+                        v-if="r.images && r.images.length"
+                        :images="r.images"
+                        compact
+                      />
                     </div>
                   </div>
                 </details>

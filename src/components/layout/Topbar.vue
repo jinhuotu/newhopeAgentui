@@ -88,7 +88,7 @@ async function onLogout() {
         <div class="hidden leading-tight md:block">
           <div class="text-xs font-medium">{{ displayName }}</div>
           <div class="text-[10px] text-muted-foreground">
-            微泰智能体 · {{ roleLabel }}
+            新希望智能体 · {{ roleLabel }}
           </div>
         </div>
         <button

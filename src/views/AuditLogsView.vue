@@ -1,18 +1,21 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
-import { History, LoaderCircle, RefreshCw, ShieldAlert } from 'lucide-vue-next'
+import { Download, History, LoaderCircle, MessageSquareQuote, RefreshCw, ShieldAlert } from 'lucide-vue-next'
 import { Panel, PageHeader, KpiCard, Tag } from '@/components/ui-kit'
 import { ApiError } from '@/lib/api'
 import {
+  downloadRagAuditCsv,
   fetchAuditSummary,
   fetchLoginLogs,
   fetchOperationLogs,
+  fetchRagAuditLogs,
   type AuditSummary,
   type LoginLogItem,
   type OperationLogItem,
+  type RagAuditLogItem,
 } from '@/lib/audit-api'
 
-type TabKey = 'operations' | 'logins'
+type TabKey = 'operations' | 'logins' | 'rag'
 
 const MODULE_LABEL: Record<string, string> = {
   users: '用户',
@@ -20,6 +23,7 @@ const MODULE_LABEL: Record<string, string> = {
   hot_configs: '热配置',
   mcp: 'MCP',
   models: '模型',
+  knowledge: '知识库',
 }
 
 const ACTION_LABEL: Record<string, string> = {
@@ -32,6 +36,14 @@ const ACTION_LABEL: Record<string, string> = {
   update_tool: '更新工具',
 }
 
+const OUTCOME_LABEL: Record<string, string> = {
+  hit: '命中',
+  miss: '未命中',
+  refusal: '硬拒答',
+  sensitive_block: '敏感词拦截',
+  error: '错误',
+}
+
 const REASON_LABEL: Record<string, string> = {
   ok: '成功',
   invalid_credentials: '账号或密码错误',
@@ -40,18 +52,24 @@ const REASON_LABEL: Record<string, string> = {
 
 const tab = ref<TabKey>('operations')
 const loading = ref(true)
+const exportLoading = ref(false)
 const error = ref('')
 const summary = ref<AuditSummary | null>(null)
 const operations = ref<OperationLogItem[]>([])
 const opTotal = ref(0)
 const logins = ref<LoginLogItem[]>([])
 const loginTotal = ref(0)
+const ragLogs = ref<RagAuditLogItem[]>([])
+const ragTotal = ref(0)
 
 const moduleFilter = ref('')
 const opSuccessFilter = ref<'all' | 'ok' | 'fail'>('all')
 const opKeyword = ref('')
 const loginSuccessFilter = ref<'all' | 'ok' | 'fail'>('all')
 const loginUsername = ref('')
+const ragOutcomeFilter = ref('')
+const ragUsername = ref('')
+const ragKeyword = ref('')
 
 function formatTime(ts: number | null | undefined): string {
   if (!ts) return '—'
@@ -70,7 +88,7 @@ async function reload() {
   loading.value = true
   error.value = ''
   try {
-    const [sum, opList, loginList] = await Promise.all([
+    const [sum, opList, loginList, ragList] = await Promise.all([
       fetchAuditSummary(),
       fetchOperationLogs({
         module: moduleFilter.value || undefined,
@@ -83,12 +101,20 @@ async function reload() {
         username: loginUsername.value.trim() || undefined,
         limit: 100,
       }),
+      fetchRagAuditLogs({
+        outcome: ragOutcomeFilter.value || undefined,
+        username: ragUsername.value.trim() || undefined,
+        keyword: ragKeyword.value.trim() || undefined,
+        limit: 100,
+      }),
     ])
     summary.value = sum
     operations.value = opList.items || []
     opTotal.value = opList.total || 0
     logins.value = loginList.items || []
     loginTotal.value = loginList.total || 0
+    ragLogs.value = ragList.items || []
+    ragTotal.value = ragList.total || 0
   } catch (e) {
     error.value =
       e instanceof ApiError || e instanceof Error ? e.message : '加载日志失败'
@@ -97,8 +123,23 @@ async function reload() {
   }
 }
 
+async function exportRagCsv() {
+  exportLoading.value = true
+  try {
+    await downloadRagAuditCsv({
+      outcome: ragOutcomeFilter.value || undefined,
+      username: ragUsername.value.trim() || undefined,
+      keyword: ragKeyword.value.trim() || undefined,
+    })
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : '导出失败'
+  } finally {
+    exportLoading.value = false
+  }
+}
+
 onMounted(reload)
-watch([moduleFilter, opSuccessFilter, loginSuccessFilter], () => {
+watch([moduleFilter, opSuccessFilter, loginSuccessFilter, ragOutcomeFilter], () => {
   void reload()
 })
 </script>
@@ -106,7 +147,7 @@ watch([moduleFilter, opSuccessFilter, loginSuccessFilter], () => {
 <template>
   <PageHeader
     title="操作与登录日志"
-    description="记录用户 / 角色 / 热配置 / MCP / 模型的写入操作，以及登录成功与失败（含 IP）。仅保留最近 7 天，超时自动删除。"
+    description="记录管理端写入、登录行为，以及 AI 知识库问答全链路审计（问题、召回、回答）。仅保留最近 7 天，超时自动删除。"
   >
     <template #badges>
       <Tag tone="molybdenum">保留 {{ summary?.retentionDays ?? 7 }} 天</Tag>
@@ -126,7 +167,7 @@ watch([moduleFilter, opSuccessFilter, loginSuccessFilter], () => {
 
   <p v-if="error" class="mb-4 text-xs text-iron">{{ error }}</p>
 
-  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+  <div class="grid grid-cols-2 lg:grid-cols-6 gap-4 mb-5">
     <KpiCard
       label="近 7 天操作"
       :value="String(summary?.operationTotal ?? 0)"
@@ -155,9 +196,23 @@ watch([moduleFilter, opSuccessFilter, loginSuccessFilter], () => {
       unit="次"
       tone="iron"
     />
+    <KpiCard
+      label="RAG 问答"
+      :value="String(summary?.ragTotal ?? 0)"
+      unit="次"
+      tone="molybdenum"
+    >
+      <template #icon><MessageSquareQuote class="size-4" /></template>
+    </KpiCard>
+    <KpiCard
+      label="未命中/拒答"
+      :value="String(summary?.ragMiss ?? 0)"
+      unit="次"
+      tone="sulfur"
+    />
   </div>
 
-  <div class="mb-4 flex items-center gap-1 text-xs">
+  <div class="mb-4 flex items-center gap-1 text-xs flex-wrap">
     <button
       type="button"
       class="h-8 px-3 rounded-md border"
@@ -181,6 +236,18 @@ watch([moduleFilter, opSuccessFilter, loginSuccessFilter], () => {
       @click="tab = 'logins'"
     >
       登录日志
+    </button>
+    <button
+      type="button"
+      class="h-8 px-3 rounded-md border"
+      :class="
+        tab === 'rag'
+          ? 'bg-iron/15 border-iron/30 text-iron'
+          : 'border-border text-muted-foreground'
+      "
+      @click="tab = 'rag'"
+    >
+      RAG 问答审计
     </button>
   </div>
 
@@ -272,7 +339,7 @@ watch([moduleFilter, opSuccessFilter, loginSuccessFilter], () => {
   </Panel>
 
   <Panel
-    v-else
+    v-else-if="tab === 'logins'"
     title="登录记录"
     :subtitle="`共 ${loginTotal} 条（最多显示 100）`"
     flush
@@ -333,6 +400,108 @@ watch([moduleFilter, opSuccessFilter, loginSuccessFilter], () => {
             <td class="px-4 py-2.5 text-muted-foreground max-w-[360px] truncate" :title="row.userAgent">
               {{ row.userAgent || '—' }}
             </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </Panel>
+
+  <Panel
+    v-else
+    title="RAG 问答审计"
+    :subtitle="`共 ${ragTotal} 条（最多显示 100）`"
+    flush
+  >
+    <div class="px-4 py-3 flex flex-wrap gap-2 border-b border-border">
+      <select
+        v-model="ragOutcomeFilter"
+        class="h-8 px-2 text-xs rounded-md border border-border bg-background"
+      >
+        <option value="">全部结果</option>
+        <option value="hit">命中</option>
+        <option value="miss">未命中</option>
+        <option value="refusal">硬拒答</option>
+        <option value="sensitive_block">敏感词拦截</option>
+      </select>
+      <input
+        v-model="ragUsername"
+        class="h-8 px-2 text-xs rounded-md border border-border bg-background min-w-[120px]"
+        placeholder="用户名"
+        @keydown.enter="reload"
+      />
+      <input
+        v-model="ragKeyword"
+        class="h-8 px-2 text-xs rounded-md border border-border bg-background min-w-[180px]"
+        placeholder="问题 / 回答关键词"
+        @keydown.enter="reload"
+      />
+      <button
+        type="button"
+        class="h-8 px-3 text-xs rounded-md border border-border hover:bg-accent"
+        @click="reload"
+      >
+        查询
+      </button>
+      <button
+        type="button"
+        class="h-8 px-3 text-xs rounded-md border border-border hover:bg-accent inline-flex items-center gap-1"
+        :disabled="exportLoading"
+        @click="exportRagCsv"
+      >
+        <Download class="size-3.5" />
+        导出 CSV
+      </button>
+    </div>
+    <div v-if="loading" class="px-4 py-6 text-xs text-muted-foreground inline-flex items-center gap-1.5">
+      <LoaderCircle class="size-3.5 animate-spin" />加载中…
+    </div>
+    <div v-else class="overflow-x-auto">
+      <table class="w-full text-xs min-w-[1100px]">
+        <thead class="text-muted-foreground bg-background/40">
+          <tr class="border-b border-border">
+            <th
+              v-for="h in ['时间', '用户', '结果', '召回', '最高分', '问题', '回答', 'IP', '耗时']"
+              :key="h"
+              class="text-left font-medium px-4 py-2.5"
+            >
+              {{ h }}
+            </th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-border">
+          <tr v-if="!ragLogs.length">
+            <td colspan="9" class="px-4 py-8 text-center text-muted-foreground">暂无 RAG 问答记录</td>
+          </tr>
+          <tr v-for="row in ragLogs" :key="row.id" class="hover:bg-background/40 align-top">
+            <td class="px-4 py-2.5 data-num whitespace-nowrap">{{ formatTime(row.createdAt) }}</td>
+            <td class="px-4 py-2.5">{{ row.username }}</td>
+            <td class="px-4 py-2.5">
+              <Tag
+                :tone="
+                  row.outcome === 'hit'
+                    ? 'patina'
+                    : row.outcome === 'sensitive_block'
+                      ? 'iron'
+                      : 'sulfur'
+                "
+              >
+                {{ OUTCOME_LABEL[row.outcome] || row.outcome }}
+              </Tag>
+            </td>
+            <td class="px-4 py-2.5 data-num">{{ row.chunkCount }}</td>
+            <td class="px-4 py-2.5 data-num">
+              {{ row.topScore != null ? row.topScore.toFixed(4) : '—' }}
+            </td>
+            <td class="px-4 py-2.5 max-w-[220px]">
+              <div class="line-clamp-3" :title="row.query">{{ row.query }}</div>
+            </td>
+            <td class="px-4 py-2.5 max-w-[260px]">
+              <div class="line-clamp-3 text-muted-foreground" :title="row.answer || undefined">
+                {{ row.answer || '—' }}
+              </div>
+            </td>
+            <td class="px-4 py-2.5 data-num">{{ row.ip || '—' }}</td>
+            <td class="px-4 py-2.5 data-num">{{ row.durationMs }} ms</td>
           </tr>
         </tbody>
       </table>

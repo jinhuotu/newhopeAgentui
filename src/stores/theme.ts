@@ -4,7 +4,7 @@ import { computed, ref, watch } from 'vue'
 export type ThemeMode = 'dark' | 'light'
 
 /** v2：默认浅色；与旧 key 隔离，避免历史深色偏好覆盖新产品默认 */
-const STORAGE_KEY = 'weitai-theme-v1'
+const STORAGE_KEY = 'newhope-theme-v1'
 
 function readStoredTheme(): ThemeMode {
   try {

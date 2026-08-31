@@ -28,7 +28,7 @@ async function onSubmit() {
           ? '用户名或密码错误'
           : err.message
     } else if (err instanceof TypeError) {
-      error.value = '无法连接后端，请确认 weitaiAgent API 已启动（默认 :8100）'
+      error.value = '无法连接后端，请确认 newhopeAgent API 已启动（默认 :8200）'
     } else {
       error.value = '登录失败，请稍后重试'
     }
@@ -81,7 +81,7 @@ async function onSubmit() {
             >
               <Bot class="size-6" />
             </div>
-            <h1 class="text-3xl font-semibold tracking-wide">微泰智能体</h1>
+            <h1 class="text-3xl font-semibold tracking-wide">新希望智能体</h1>
             <p class="mt-3 max-w-sm text-sm leading-relaxed text-muted-foreground">
               智能体交互系统 · 登录后进入问答、知识库、MCP 工具与工作流。
             </p>
@@ -99,7 +99,7 @@ async function onSubmit() {
             >
               <Bot class="size-5" />
             </div>
-            <h1 class="text-xl font-semibold">微泰智能体</h1>
+            <h1 class="text-xl font-semibold">新希望智能体</h1>
           </div>
 
           <h2 class="text-lg font-medium">账号登录</h2>

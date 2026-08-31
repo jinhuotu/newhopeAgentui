@@ -4,6 +4,20 @@
  */
 
 const THREE_D_EXTS = ['fbx', 'obj', 'gltf', 'glb', 'stl']
+/** 由后端抽正文：PDF / Excel */
+const SERVER_PARSE_EXTS = [
+  'pdf',
+  'xlsx',
+  'xls',
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+  'bmp',
+  'tif',
+  'tiff',
+]
+const MAX_FILE_BYTES = 30 * 1024 * 1024
 
 export type ParsedFile = {
   content: string
@@ -18,7 +32,7 @@ function fmtSize(n?: number) {
   return `${(n / 1024 / 1024).toFixed(2)} MB`
 }
 
-export { THREE_D_EXTS, fmtSize }
+export { THREE_D_EXTS, SERVER_PARSE_EXTS, MAX_FILE_BYTES, fmtSize }
 
 export async function readFileSmart(file: File): Promise<ParsedFile> {
   const t = file.name.split('.').pop()?.toLowerCase() || ''
@@ -58,8 +72,8 @@ export async function readFileSmart(file: File): Promise<ParsedFile> {
     }
   }
 
-  // PDF / Excel / 图片 / CAD 等：避免静默写入假正文，明确提示
+  // PDF / 旧版 .doc / 图片 / CAD 等：避免静默写入假正文（PDF/Excel 由后端接口解析）
   throw new Error(
-    `${t.toUpperCase() || '该'} 格式暂无法在浏览器全文解析。请先转为 .docx / .txt / .md，或使用「文本粘贴」录入正文`,
+    `${t.toUpperCase() || '该'} 格式暂无法在浏览器全文解析。PDF / Excel 请直接上传（由服务端解析）；其它格式请先转为 .docx / .txt / .md，或使用「文本粘贴」`,
   )
 }

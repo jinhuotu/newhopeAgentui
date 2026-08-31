@@ -29,6 +29,14 @@ export type ChatSessionMessage = {
     doc_id?: string;
     kb_id?: string;
     kbId?: string;
+    name?: string;
+    chunk_index?: number;
+    images?: {
+      id: string;
+      page?: number | null;
+      kind?: string;
+      url: string;
+    }[];
   }[];
   knowledgeBaseIds?: string[];
   useKnowledge?: boolean;
@@ -132,7 +140,10 @@ export type ToolEventPayload = {
 };
 
 export type StreamHandlers = {
-  onRefs?: (chunks: unknown[], meta?: { agentId?: string; agentName?: string }) => void;
+  onRefs?: (
+    chunks: unknown[],
+    meta?: { agentId?: string; agentName?: string; useKnowledge?: boolean },
+  ) => void;
   onDelta?: (text: string) => void;
   onTool?: (payload: ToolEventPayload) => void;
   onDone?: (payload: {
@@ -236,6 +247,7 @@ export async function streamChat(
             handlers.onRefs?.(payload.chunks || [], {
               agentId: payload.agentId,
               agentName: payload.agentName,
+              useKnowledge: payload.useKnowledge,
             });
           } else if (event === 'delta') handlers.onDelta?.(String(payload.text ?? ''));
           else if (event === 'tool') handlers.onTool?.(payload as ToolEventPayload);

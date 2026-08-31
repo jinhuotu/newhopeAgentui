@@ -1,4 +1,4 @@
-import { apiRequest } from './api'
+import { apiRequest, getApiBaseUrl } from './api'
 import { getAccessToken } from './auth'
 
 function requireToken(): string {
@@ -14,6 +14,9 @@ export type AuditSummary = {
   operationFail: number
   loginTotal: number
   loginFail: number
+  ragTotal?: number
+  ragMiss?: number
+  ragSensitive?: number
 }
 
 export type OperationLogItem = {
@@ -43,6 +46,31 @@ export type LoginLogItem = {
   reason: string
   ip: string
   userAgent: string
+  createdAt: number
+}
+
+export type RagAuditLogItem = {
+  id: number
+  userId: number | null
+  username: string
+  sessionId: string | null
+  agentId: string | null
+  query: string
+  answer: string | null
+  kbIds: string[]
+  outcome: string
+  chunkCount: number
+  topScore: number | null
+  refs: Array<{
+    rank: number
+    docId?: string
+    name?: string
+    score?: number
+    chunkIndex?: number
+    preview?: string
+  }>
+  ip: string
+  durationMs: number
   createdAt: number
 }
 
@@ -95,4 +123,51 @@ export async function fetchLoginLogs(params?: {
     `/api/v1/audit/logins${qs ? `?${qs}` : ''}`,
     { token: requireToken() },
   )
+}
+
+export async function fetchRagAuditLogs(params?: {
+  outcome?: string
+  username?: string
+  keyword?: string
+  limit?: number
+  offset?: number
+}): Promise<AuditList<RagAuditLogItem>> {
+  const q = new URLSearchParams()
+  if (params?.outcome) q.set('outcome', params.outcome)
+  if (params?.username) q.set('username', params.username)
+  if (params?.keyword) q.set('keyword', params.keyword)
+  if (params?.limit) q.set('limit', String(params.limit))
+  if (params?.offset) q.set('offset', String(params.offset))
+  const qs = q.toString()
+  return apiRequest<AuditList<RagAuditLogItem>>(
+    `/api/v1/audit/rag${qs ? `?${qs}` : ''}`,
+    { token: requireToken() },
+  )
+}
+
+export async function downloadRagAuditCsv(params?: {
+  outcome?: string
+  username?: string
+  keyword?: string
+  limit?: number
+}): Promise<void> {
+  const token = requireToken()
+  const q = new URLSearchParams()
+  if (params?.outcome) q.set('outcome', params.outcome)
+  if (params?.username) q.set('username', params.username)
+  if (params?.keyword) q.set('keyword', params.keyword)
+  if (params?.limit) q.set('limit', String(params.limit ?? 2000))
+  const res = await fetch(`${getApiBaseUrl()}/api/v1/audit/rag/export?${q.toString()}`, {
+    headers: { Authorization: `Bearer ${token}`, Accept: 'text/csv' },
+  })
+  if (!res.ok) {
+    throw new Error(`导出失败 (${res.status})`)
+  }
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `rag_audit_${new Date().toISOString().slice(0, 10)}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
 }

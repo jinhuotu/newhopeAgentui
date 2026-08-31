@@ -190,10 +190,6 @@ async function submit() {
     formError.value = '请填写名称、API Base、模型标识'
     return
   }
-  if (!editing.value && !form.value.apiKey.trim()) {
-    formError.value = '新建时必须填写 API Key'
-    return
-  }
   saving.value = true
   formError.value = null
   try {
@@ -502,15 +498,18 @@ function onDeleteOpen(v: boolean) {
         </label>
         <label class="block">
           <div class="text-[11px] text-text-secondary mb-1">
-            {{ editing ? 'API Key（留空不改）' : 'API Key' }}
+            {{ editing ? 'API Key（留空不改）' : 'API Key（可选）' }}
           </div>
           <input
             v-model="form.apiKey"
             class="kb-input"
             type="password"
             autocomplete="new-password"
-            :placeholder="editing ? `当前 ${editing.apiKeyMasked}` : 'sk-...'"
+            :placeholder="editing ? `当前 ${editing.apiKeyMasked || '未设置'}` : '局域网自建可留空；云服务填 sk-...'"
           />
+          <div class="mt-1 text-[10.5px] text-text-muted">
+            局域网自建、无需鉴权的 OpenAI 兼容接口可留空；公有云模型仍需填写。
+          </div>
         </label>
         <label class="block">
           <div class="text-[11px] text-text-secondary mb-1">模型标识</div>

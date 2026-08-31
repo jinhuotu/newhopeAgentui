@@ -185,7 +185,7 @@ export async function createModelConfig(body: {
   kind: ModelKind;
   modelType: ModelType;
   apiBase: string;
-  apiKey: string;
+  apiKey?: string;
   modelName: string;
   temperature?: number | null;
   timeoutSeconds?: number;

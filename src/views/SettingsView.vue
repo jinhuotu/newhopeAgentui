@@ -35,7 +35,7 @@ onMounted(async () => {
   try {
     const data = await fetchHealth()
     healthOk.value = data.status === 'up'
-    healthMsg.value = data.service || 'weitai-api'
+    healthMsg.value = data.service || 'newhope-api'
   } catch (err) {
     healthOk.value = false
     healthMsg.value = err instanceof ApiError ? err.message : '无法连接后端'
@@ -49,7 +49,7 @@ onMounted(async () => {
     description="主题、账号信息与后端连通性。平台暂无独立设置接口，此处仅展示当前运行状态。"
   >
     <template #badges>
-      <Tag tone="molybdenum">weitaiAgent v0.1.0</Tag>
+      <Tag tone="molybdenum">newhopeAgent v0.1.0</Tag>
     </template>
   </PageHeader>
 
@@ -104,8 +104,8 @@ onMounted(async () => {
           {{ healthMsg || '—' }}
         </div>
         <p class="text-[11px] text-muted-foreground leading-relaxed">
-          开发环境默认通过 Vite 代理访问 <span class="font-mono">127.0.0.1:8100</span>。
-          需要直连时设置 <span class="font-mono">VITE_API_BASE_URL</span>。
+          默认走同源 <span class="font-mono">/api</span>（开发：Vite 代理；生产：Nginx 反代）。
+          需要直连后端时再设置 <span class="font-mono">VITE_API_BASE_URL</span>。
         </p>
       </div>
     </Panel>

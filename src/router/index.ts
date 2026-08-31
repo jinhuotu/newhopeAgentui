@@ -104,8 +104,8 @@ router.beforeEach(async (to) => {
 })
 
 router.afterEach((to) => {
-  const title = (to.meta.title as string | undefined) || '微泰智能体'
-  document.title = `${title} · 微泰智能体`
+  const title = (to.meta.title as string | undefined) || '新希望智能体'
+  document.title = `${title} · 新希望智能体`
 
   useMobileMenuStore().close()
 
