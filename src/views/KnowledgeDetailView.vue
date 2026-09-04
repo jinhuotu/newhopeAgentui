@@ -49,7 +49,7 @@ import {
   type KnowledgeBaseItem,
   type ReviewStatus,
 } from '@/lib/knowledge-api'
-import { THREE_D_EXTS, SERVER_PARSE_EXTS, MAX_FILE_BYTES, fmtSize, readFileSmart } from '@/lib/read-file-smart'
+import { THREE_D_EXTS, SERVER_PARSE_EXTS, MAX_FILE_BYTES, MAX_FILE_MB, fmtSize, readFileSmart } from '@/lib/read-file-smart'
 import { formatRelativeTime } from '@/lib/utils'
 import { useAuthStore } from '@/stores/auth'
 import FbxViewer from '@/components/three-preview/FbxViewer.vue'
@@ -582,7 +582,7 @@ function enqueueFiles(files: FileList | File[], opts?: { force?: boolean }) {
   const valid: File[] = []
   for (const file of arr) {
     if (file.size > MAX_FILE_BYTES) {
-      toast.value = { type: 'err', msg: `${file.name}：单文件不能超过 30 MB，已跳过` }
+      toast.value = { type: 'err', msg: `${file.name}：单文件不能超过 ${MAX_FILE_MB} MB，已跳过` }
       continue
     }
     valid.push(file)
@@ -1016,7 +1016,7 @@ function onDocPageSizeChange(e: Event) {
               <div class="text-[11px] text-text-secondary max-w-xl">
                 支持一次选择多个文件，将<strong class="text-text-primary font-normal">按顺序逐个</strong>上传、解析正文、切块并向量化（不并行）。正文入库：.pdf（含扫描件 OCR）/ .xlsx / .xls / 图片 OCR / .docx / .txt / .md / .csv /
                 .json。扫描件与图片首次识别较慢。旧版 .doc 请另存为 .docx 或使用「文本粘贴」。
-                单文件最大 30 MB。入库后默认<strong class="text-text-primary font-normal">待审核</strong>。
+                单文件最大 {{ MAX_FILE_MB }} MB。入库后默认<strong class="text-text-primary font-normal">待审核</strong>。
               </div>
               <input
                 ref="fileRef"

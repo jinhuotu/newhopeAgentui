@@ -17,7 +17,8 @@ const SERVER_PARSE_EXTS = [
   'tif',
   'tiff',
 ]
-const MAX_FILE_BYTES = 30 * 1024 * 1024
+const MAX_FILE_MB = 200
+const MAX_FILE_BYTES = MAX_FILE_MB * 1024 * 1024
 
 export type ParsedFile = {
   content: string
@@ -32,7 +33,7 @@ function fmtSize(n?: number) {
   return `${(n / 1024 / 1024).toFixed(2)} MB`
 }
 
-export { THREE_D_EXTS, SERVER_PARSE_EXTS, MAX_FILE_BYTES, fmtSize }
+export { THREE_D_EXTS, SERVER_PARSE_EXTS, MAX_FILE_BYTES, MAX_FILE_MB, fmtSize }
 
 export async function readFileSmart(file: File): Promise<ParsedFile> {
   const t = file.name.split('.').pop()?.toLowerCase() || ''
